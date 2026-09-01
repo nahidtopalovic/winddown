@@ -67,6 +67,22 @@ struct MenuContent: View {
             DailyNote.openToday()
         }
 
+        let recentNotes = DailyNote.recent()
+        if !recentNotes.isEmpty {
+            Menu("Recent notes") {
+                ForEach(recentNotes, id: \.notePath) { note in
+                    Button(noteLabel(day: note.day)) {
+                        DailyNote.open(notePath: note.notePath)
+                    }
+                }
+                Button("Show all in Finder") {
+                    NSWorkspace.shared.open(
+                        URL(fileURLWithPath: settings.noteDirectory, isDirectory: true)
+                    )
+                }
+            }
+        }
+
         Divider()
 
         Button("Settings…") {
@@ -88,6 +104,18 @@ struct MenuContent: View {
         case .evening: "Evening — work apps are off"
         case .offDuty: settings.pausedUntil != nil ? "Paused until tomorrow" : "Off duty"
         }
+    }
+
+    /// "Today", "Yesterday", or the weekday + date for older notes.
+    private func noteLabel(day: String) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        guard let date = formatter.date(from: day) else { return day }
+
+        if Calendar.current.isDateInToday(date) { return "Today" }
+        if Calendar.current.isDateInYesterday(date) { return "Yesterday" }
+        formatter.dateFormat = "EEEE, MMM d"
+        return formatter.string(from: date)
     }
 
     private var cutoffLabel: String {

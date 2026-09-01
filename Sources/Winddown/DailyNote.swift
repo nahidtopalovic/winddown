@@ -13,19 +13,35 @@ enum DailyNote {
         "\(AppSettings.shared.noteDirectory)/\(dayKey(for: date)).md"
     }
 
-    /// Opens in TextEdit rather than the system .md handler: that handler is
-    /// often a code editor, which may itself be on the blocklist by evening.
     static func openToday() {
-        let notePath = path()
-        if !FileManager.default.fileExists(atPath: notePath) {
+        if !FileManager.default.fileExists(atPath: path()) {
             append(raw: "") // creates the file with its date header
         }
+        open(notePath: path())
+    }
+
+    /// Opens in TextEdit rather than the system .md handler: that handler is
+    /// often a code editor, which may itself be on the blocklist by evening.
+    static func open(notePath: String) {
         let textEdit = URL(fileURLWithPath: "/System/Applications/TextEdit.app")
         NSWorkspace.shared.open(
             [URL(fileURLWithPath: notePath)],
             withApplicationAt: textEdit,
             configuration: NSWorkspace.OpenConfiguration()
         )
+    }
+
+    /// Existing daily notes, newest first. Day-note filenames are
+    /// yyyy-MM-dd.md, so a name sort is a date sort.
+    static func recent(limit: Int = 7) -> [(day: String, notePath: String)] {
+        let dir = AppSettings.shared.noteDirectory
+        guard let files = try? FileManager.default.contentsOfDirectory(atPath: dir) else { return [] }
+
+        return files
+            .filter { $0.range(of: #"^\d{4}-\d{2}-\d{2}\.md$"#, options: .regularExpression) != nil }
+            .sorted(by: >)
+            .prefix(limit)
+            .map { (day: String($0.dropLast(3)), notePath: "\(dir)/\($0)") }
     }
 
     static func writeRitual(finished: String, tomorrow: String, sessions: [ClaudeSession]) {

@@ -13,7 +13,7 @@ enum Banner {
         dismissTask?.cancel()
         panel?.orderOut(nil)
 
-        let content = BannerView(title: title, body: body)
+        let content = BannerView(title: title, body: body, onDismiss: { dismiss() })
         let hosting = NSHostingView(rootView: content)
         hosting.frame.size = hosting.fittingSize
 
@@ -27,7 +27,7 @@ enum Banner {
         panel.backgroundColor = .clear
         panel.level = .statusBar
         panel.hasShadow = true
-        panel.ignoresMouseEvents = true
+        panel.ignoresMouseEvents = false // click anywhere on it to dismiss
         panel.isReleasedWhenClosed = false
         panel.collectionBehavior = [.canJoinAllSpaces, .transient]
 
@@ -48,15 +48,22 @@ enum Banner {
             panel.orderOut(nil)
         }
     }
+
+    static func dismiss() {
+        dismissTask?.cancel()
+        panel?.orderOut(nil)
+    }
 }
 
 private struct BannerView: View {
     let title: String
     let body_: String
+    let onDismiss: () -> Void
 
-    init(title: String, body: String) {
+    init(title: String, body: String, onDismiss: @escaping () -> Void) {
         self.title = title
         self.body_ = body
+        self.onDismiss = onDismiss
     }
 
     var body: some View {
@@ -74,5 +81,7 @@ private struct BannerView: View {
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.quaternary))
         .frame(maxWidth: 420)
+        .contentShape(RoundedRectangle(cornerRadius: 12))
+        .onTapGesture { onDismiss() }
     }
 }
