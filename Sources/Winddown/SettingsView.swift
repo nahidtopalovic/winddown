@@ -95,6 +95,14 @@ struct WallpaperPicker: View {
                 panel.allowedContentTypes = [.image]
                 panel.allowsMultipleSelection = false
                 panel.canChooseDirectories = false
+                // Start in Apple's built-in wallpapers (the same images the
+                // System Settings picker offers, minus the aerials — those
+                // have no public API).
+                panel.directoryURL = URL(
+                    fileURLWithPath: path.isEmpty
+                        ? "/System/Library/Desktop Pictures"
+                        : (path as NSString).deletingLastPathComponent
+                )
                 if panel.runModal() == .OK, let url = panel.url {
                     path = url.path
                 }
