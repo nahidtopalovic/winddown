@@ -25,7 +25,14 @@ final class AppState: ObservableObject {
     static let shared = AppState()
 
     @Published var phase: Phase = .working
-    @Published var menuTitle: String = ""
+    /// Separate observable so the once-a-minute countdown re-renders only the
+    /// menu bar label. If AppState published it, every change would rebuild
+    /// the open menu and snap its submenus shut.
+    @MainActor
+    final class MenuTitle: ObservableObject {
+        @Published var text: String = ""
+    }
+    let menuTitle = MenuTitle()
 
     let settings = AppSettings.shared
     private let blocker = AppBlocker()
@@ -60,11 +67,15 @@ final class AppState: ObservableObject {
         if newPhase != phase {
             transition(to: newPhase, at: now)
         }
-        menuTitle = title(for: newPhase, at: now)
+        let newTitle = title(for: newPhase, at: now)
+        if newTitle != menuTitle.text { menuTitle.text = newTitle }
         // Keep the blocker in sync even without a phase change (override expiry,
         // blocklist edits).
         let shouldBlock = newPhase == .evening
         blocker.setActive(shouldBlock, bundleIds: settings.blockedBundleIds)
+        // Every tick, not just transitions: self-heals after space switches,
+        // settings edits, and manual wallpaper changes. No-op when unchanged.
+        Wallpaper.apply(for: newPhase)
         // Ritual can become due while already in .evening (override expired).
         if newPhase == .evening && !isRitualDone(at: now) && !RitualPanelController.shared.isVisible {
             RitualPanelController.shared.show()

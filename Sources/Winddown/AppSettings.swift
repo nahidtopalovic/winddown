@@ -32,6 +32,13 @@ final class AppSettings: ObservableObject {
     @Published var noteDirectory: String {
         didSet { defaults.set(noteDirectory, forKey: "noteDirectory") }
     }
+    /// Wallpaper image paths; empty string disables wallpaper switching.
+    @Published var workWallpaper: String {
+        didSet { defaults.set(workWallpaper, forKey: "workWallpaper") }
+    }
+    @Published var eveningWallpaper: String {
+        didSet { defaults.set(eveningWallpaper, forKey: "eveningWallpaper") }
+    }
 
     // Runtime escape hatches. Persisted so they survive an app restart.
     /// Work-late extension: blocking is suspended until this date.
@@ -57,6 +64,8 @@ final class AppSettings: ObservableObject {
             ?? ["com.microsoft.VSCode", "com.anthropic.claudefordesktop"]
         noteDirectory = defaults.string(forKey: "noteDirectory")
             ?? NSString(string: "~/Documents/winddown").expandingTildeInPath
+        workWallpaper = defaults.string(forKey: "workWallpaper") ?? ""
+        eveningWallpaper = defaults.string(forKey: "eveningWallpaper") ?? ""
         overrideUntil = defaults.object(forKey: "overrideUntil") as? Date
         pausedUntil = defaults.object(forKey: "pausedUntil") as? Date
         ritualDoneDay = defaults.string(forKey: "ritualDoneDay")

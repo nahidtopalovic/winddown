@@ -10,13 +10,7 @@ struct WinddownApp: App {
         MenuBarExtra {
             MenuContent(state: state, settings: settings)
         } label: {
-            // Interpolating the symbol into the Text keeps it on the text
-            // baseline; a separate Image floats misaligned in the menu bar.
-            if state.menuTitle.isEmpty {
-                Image(systemName: iconName)
-            } else {
-                Text("\(Image(systemName: iconName)) \(state.menuTitle)")
-            }
+            MenuBarLabel(title: state.menuTitle, iconName: iconName)
         }
 
         Settings {
@@ -32,6 +26,22 @@ struct WinddownApp: App {
         case .workingLate: "moon.circle"
         case .evening: "moon.stars.fill"
         case .offDuty: "zzz"
+        }
+    }
+}
+
+/// Observes the countdown in isolation — see AppState.MenuTitle.
+struct MenuBarLabel: View {
+    @ObservedObject var title: AppState.MenuTitle
+    let iconName: String
+
+    var body: some View {
+        // Interpolating the symbol into the Text keeps it on the text
+        // baseline; a separate Image floats misaligned in the menu bar.
+        if title.text.isEmpty {
+            Image(systemName: iconName)
+        } else {
+            Text("\(Image(systemName: iconName)) \(title.text)")
         }
     }
 }

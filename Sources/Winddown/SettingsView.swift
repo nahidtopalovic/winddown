@@ -50,6 +50,13 @@ struct SettingsView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
 
+            Section("Wallpaper") {
+                WallpaperPicker(label: "During work", path: $settings.workWallpaper)
+                WallpaperPicker(label: "After work", path: $settings.eveningWallpaper)
+                Text("Set both to have the desktop switch moods at the cutoff. Leave empty to disable.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
             Section("Notes") {
                 TextField("Note directory", text: $settings.noteDirectory)
                     .font(.system(.body, design: .monospaced))
@@ -69,6 +76,33 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .frame(width: 460, height: 560)
+    }
+}
+
+struct WallpaperPicker: View {
+    let label: String
+    @Binding var path: String
+
+    var body: some View {
+        HStack {
+            Text(label)
+            Spacer()
+            Text(path.isEmpty ? "None" : URL(fileURLWithPath: path).lastPathComponent)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            Button("Choose…") {
+                let panel = NSOpenPanel()
+                panel.allowedContentTypes = [.image]
+                panel.allowsMultipleSelection = false
+                panel.canChooseDirectories = false
+                if panel.runModal() == .OK, let url = panel.url {
+                    path = url.path
+                }
+            }
+            if !path.isEmpty {
+                Button("Clear") { path = "" }
+            }
+        }
     }
 }
 
