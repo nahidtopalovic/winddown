@@ -1,0 +1,206 @@
+import AppKit
+import Combine
+import UserNotifications
+
+enum Phase: Equatable {
+    /// Normal work hours, nothing to do.
+    case working
+    /// Ramp started (amber icon).
+    case ramp
+    /// Final stretch before cutoff (red icon), notification fired.
+    case warning
+    /// Past cutoff with a work-late override active.
+    case workingLate
+    /// Past cutoff: ritual pending or done, work apps blocked.
+    case evening
+    /// No cutoff today (weekend or paused).
+    case offDuty
+}
+
+/// Drives the whole app: computes the current phase from the wall clock every
+/// second, fires the transition side effects (notification, ritual panel,
+/// app blocker), and survives sleep/wake by recomputing on every tick instead
+/// of scheduling one-shot timers at absolute dates.
+@MainActor
+final class AppState: ObservableObject {
+    static let shared = AppState()
+
+    @Published var phase: Phase = .working
+    @Published var menuTitle: String = ""
+
+    let settings = AppSettings.shared
+    private let blocker = AppBlocker()
+    private var timer: Timer?
+    private var didNotifyWarning = false
+    private var settingsSink: AnyCancellable?
+
+    private init() {}
+
+    func start() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+        tick()
+        let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.tick() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        self.timer = timer
+        // Re-evaluate immediately when settings change (e.g. cutoff moved for testing).
+        settingsSink = settings.objectWillChange.sink { [weak self] _ in
+            Task { @MainActor in self?.tick() }
+        }
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.tick() }
+        }
+    }
+
+    private func tick() {
+        let now = Date()
+        let newPhase = computePhase(at: now)
+
+        if newPhase != phase {
+            transition(to: newPhase, at: now)
+        }
+        menuTitle = title(for: newPhase, at: now)
+        // Keep the blocker in sync even without a phase change (override expiry,
+        // blocklist edits).
+        let shouldBlock = newPhase == .evening
+        blocker.setActive(shouldBlock, bundleIds: settings.blockedBundleIds)
+        // Ritual can become due while already in .evening (override expired).
+        if newPhase == .evening && !isRitualDone(at: now) && !RitualPanelController.shared.isVisible {
+            RitualPanelController.shared.show()
+        }
+    }
+
+    private func transition(to newPhase: Phase, at now: Date) {
+        phase = newPhase
+        switch newPhase {
+        case .warning:
+            if !didNotifyWarning {
+                didNotifyWarning = true
+                notify(
+                    title: "\(settings.warnLeadMinutes) minutes left",
+                    body: "Start wrapping up. Commit what's in flight."
+                )
+            }
+        case .evening:
+            break // ritual handled in tick(), blocker in tick()
+        case .working, .ramp, .offDuty, .workingLate:
+            didNotifyWarning = newPhase == .workingLate
+        }
+    }
+
+    // MARK: - Phase math
+
+    /// Minutes since midnight in the local calendar.
+    private func minutes(of date: Date) -> Int {
+        let comps = Calendar.current.dateComponents([.hour, .minute], from: date)
+        return (comps.hour ?? 0) * 60 + (comps.minute ?? 0)
+    }
+
+    private func isWorkday(_ date: Date) -> Bool {
+        guard settings.weekdaysOnly else { return true }
+
+        return !Calendar.current.isDateInWeekend(date)
+    }
+
+    func computePhase(at now: Date) -> Phase {
+        if let paused = settings.pausedUntil, now < paused { return .offDuty }
+
+        let mins = minutes(of: now)
+
+        // Early morning belongs to the previous day's evening window.
+        if mins < settings.blockEndMinutes {
+            let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: now)!
+            if isWorkday(yesterday) && minutes(of: now) >= 0 && settings.cutoffMinutes < 24 * 60 {
+                return overrideActive(at: now) ? .workingLate : .evening
+            }
+            return .offDuty
+        }
+
+        guard isWorkday(now) else { return .offDuty }
+
+        if mins >= settings.cutoffMinutes {
+            return overrideActive(at: now) ? .workingLate : .evening
+        }
+        if mins >= settings.cutoffMinutes - settings.warnLeadMinutes { return .warning }
+        if mins >= settings.cutoffMinutes - settings.rampLeadMinutes { return .ramp }
+        return .working
+    }
+
+    func overrideActive(at now: Date) -> Bool {
+        guard let until = settings.overrideUntil else { return false }
+
+        return now < until
+    }
+
+    private func isRitualDone(at now: Date) -> Bool {
+        settings.ritualDoneDay == DailyNote.dayKey(for: now)
+    }
+
+    private func title(for phase: Phase, at now: Date) -> String {
+        switch phase {
+        case .offDuty:
+            return ""
+        case .evening:
+            return "off"
+        case .workingLate:
+            let left = Int(settings.overrideUntil!.timeIntervalSince(now)) / 60 + 1
+            return "late \(left)m"
+        case .working, .ramp, .warning:
+            let mins = minutes(of: now)
+            let left = settings.cutoffMinutes - mins
+            if left >= 120 { return "" } // only show countdown when the end is near
+            let hours = left / 60, rem = left % 60
+            return hours > 0 ? "\(hours)h \(rem)m" : "\(rem)m"
+        }
+    }
+
+    // MARK: - Actions
+
+    func startOverride(reason: String, minutes: Int) {
+        let until = Date().addingTimeInterval(TimeInterval(minutes * 60))
+        settings.overrideUntil = until
+        DailyNote.append(section: "Override", body: "Worked late \(minutes) min: \(reason)")
+        RitualPanelController.shared.hide()
+        tick()
+    }
+
+    func endOverride() {
+        settings.overrideUntil = nil
+        tick()
+    }
+
+    func pauseUntilTomorrow() {
+        let cal = Calendar.current
+        let tomorrow = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: Date()))!
+        let resume = cal.date(byAdding: .minute, value: settings.blockEndMinutes, to: tomorrow)!
+        settings.pausedUntil = resume
+        RitualPanelController.shared.hide()
+        tick()
+    }
+
+    func resume() {
+        settings.pausedUntil = nil
+        tick()
+    }
+
+    func completeRitual(finished: String, tomorrow: String, sessions: [ClaudeSession]) {
+        settings.ritualDoneDay = DailyNote.dayKey(for: Date())
+        DailyNote.writeRitual(finished: finished, tomorrow: tomorrow, sessions: sessions)
+        RitualPanelController.shared.hide()
+        tick()
+    }
+
+    private func notify(title: String, body: String) {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+        let request = UNNotificationRequest(
+            identifier: UUID().uuidString, content: content, trigger: nil
+        )
+        UNUserNotificationCenter.current().add(request)
+    }
+}
