@@ -1,6 +1,5 @@
 import AppKit
 import Combine
-import UserNotifications
 
 enum Phase: Equatable {
     /// Normal work hours, nothing to do.
@@ -37,7 +36,6 @@ final class AppState: ObservableObject {
     private init() {}
 
     func start() {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
         tick()
         let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.tick() }
@@ -79,7 +77,7 @@ final class AppState: ObservableObject {
         case .warning:
             if !didNotifyWarning {
                 didNotifyWarning = true
-                notify(
+                Banner.show(
                     title: "\(settings.warnLeadMinutes) minutes left",
                     body: "Start wrapping up. Commit what's in flight."
                 )
@@ -191,16 +189,5 @@ final class AppState: ObservableObject {
         DailyNote.writeRitual(finished: finished, tomorrow: tomorrow, sessions: sessions)
         RitualPanelController.shared.hide()
         tick()
-    }
-
-    private func notify(title: String, body: String) {
-        let content = UNMutableNotificationContent()
-        content.title = title
-        content.body = body
-        content.sound = .default
-        let request = UNNotificationRequest(
-            identifier: UUID().uuidString, content: content, trigger: nil
-        )
-        UNUserNotificationCenter.current().add(request)
     }
 }

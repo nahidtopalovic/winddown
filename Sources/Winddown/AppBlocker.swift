@@ -1,5 +1,4 @@
 import AppKit
-import UserNotifications
 
 /// Quits blocked apps when evening mode starts and keeps them closed by
 /// watching launch notifications. Termination is polite first (regular quit,
@@ -58,12 +57,9 @@ final class AppBlocker {
     }
 
     private func notifyBlocked(appName: String) {
-        let content = UNMutableNotificationContent()
-        content.title = "\(appName) is off for today"
-        content.body = "Work day is over. Use \"Work late\" in Winddown if it's urgent."
-        let request = UNNotificationRequest(
-            identifier: UUID().uuidString, content: content, trigger: nil
+        Banner.show(
+            title: "\(appName) is off for today",
+            body: "Work day is over. Use \"Work late\" in Winddown if it's urgent."
         )
-        UNUserNotificationCenter.current().add(request)
     }
 }
