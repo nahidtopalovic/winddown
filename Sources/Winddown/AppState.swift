@@ -130,12 +130,25 @@ final class AppState: ObservableObject {
 
         guard isWorkday(now) else { return .offDuty }
 
+        // An early finish outranks the clock: once the day is called, it stays
+        // called until tomorrow.
+        if settings.endedEarlyDay == DailyNote.dayKey(for: now) {
+            return overrideActive(at: now) ? .workingLate : .evening
+        }
         if mins >= settings.cutoffMinutes {
             return overrideActive(at: now) ? .workingLate : .evening
         }
         if mins >= settings.cutoffMinutes - settings.warnLeadMinutes { return .warning }
         if mins >= settings.cutoffMinutes - settings.rampLeadMinutes { return .ramp }
         return .working
+    }
+
+    /// True while the evening was started by hand and the scheduled cutoff is
+    /// still ahead — the only case where going back to work makes sense.
+    var didEndEarly: Bool {
+        let now = Date()
+        return settings.endedEarlyDay == DailyNote.dayKey(for: now)
+            && minutes(of: now) < settings.cutoffMinutes
     }
 
     func overrideActive(at now: Date) -> Bool {
@@ -181,6 +194,14 @@ final class AppState: ObservableObject {
         tick()
     }
 
+    /// Undo an early finish: back to work, and the ritual can run again.
+    func resumeWorkday() {
+        settings.endedEarlyDay = nil
+        settings.ritualDoneDay = nil
+        settings.overrideUntil = nil
+        tick()
+    }
+
     func pauseUntilTomorrow() {
         let cal = Calendar.current
         let tomorrow = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: Date()))!
@@ -196,7 +217,9 @@ final class AppState: ObservableObject {
     }
 
     func completeRitual(finished: String, tomorrow: String, sessions: [ClaudeSession]) {
-        settings.ritualDoneDay = DailyNote.dayKey(for: Date())
+        let today = DailyNote.dayKey(for: Date())
+        settings.ritualDoneDay = today
+        settings.endedEarlyDay = today
         DailyNote.writeRitual(finished: finished, tomorrow: tomorrow, sessions: sessions)
         RitualPanelController.shared.hide()
         tick()

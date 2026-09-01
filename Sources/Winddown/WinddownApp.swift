@@ -59,6 +59,9 @@ struct MenuContent: View {
         switch state.phase {
         case .evening:
             Button("Work late…") { RitualPanelController.shared.show() }
+            if state.didEndEarly {
+                Button("Back to work") { state.resumeWorkday() }
+            }
         case .workingLate:
             Button("Done — back to evening") { state.endOverride() }
         case .working, .ramp, .warning:

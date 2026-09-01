@@ -53,6 +53,12 @@ final class AppSettings: ObservableObject {
     @Published var ritualDoneDay: String? {
         didSet { defaults.set(ritualDoneDay, forKey: "ritualDoneDay") }
     }
+    /// Day key for which the evening was started before the cutoff, via
+    /// "End the day now". Makes an early finish stick instead of being
+    /// overruled by the clock.
+    @Published var endedEarlyDay: String? {
+        didSet { defaults.set(endedEarlyDay, forKey: "endedEarlyDay") }
+    }
 
     private init() {
         cutoffMinutes = defaults.object(forKey: "cutoffMinutes") as? Int ?? 18 * 60
@@ -69,5 +75,6 @@ final class AppSettings: ObservableObject {
         overrideUntil = defaults.object(forKey: "overrideUntil") as? Date
         pausedUntil = defaults.object(forKey: "pausedUntil") as? Date
         ritualDoneDay = defaults.string(forKey: "ritualDoneDay")
+        endedEarlyDay = defaults.string(forKey: "endedEarlyDay")
     }
 }

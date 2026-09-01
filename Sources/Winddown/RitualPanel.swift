@@ -16,7 +16,7 @@ final class RitualPanelController {
         if panel == nil {
             let panel = NSPanel(
                 contentRect: NSRect(x: 0, y: 0, width: 620, height: 560),
-                styleMask: [.titled, .fullSizeContentView, .nonactivatingPanel],
+                styleMask: [.titled, .closable, .fullSizeContentView, .nonactivatingPanel],
                 backing: .buffered, defer: false
             )
             panel.title = "Winddown"
@@ -28,6 +28,10 @@ final class RitualPanelController {
             panel.contentView = NSHostingView(rootView: RitualView())
             self.panel = panel
         }
+        // Closable only before the cutoff: at the cutoff itself the way out is
+        // "End the day" or a logged "Work late", not a quiet dismiss.
+        panel?.standardWindowButton(.closeButton)?.isHidden =
+            AppState.shared.phase == .evening
         panel?.center()
         panel?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -44,6 +48,7 @@ struct RitualView: View {
     @State private var sessions: [ClaudeSession] = []
     @State private var isShowingOverride = false
     @State private var overrideReason = ""
+    @ObservedObject private var state = AppState.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -96,6 +101,14 @@ struct RitualView: View {
             }
 
             HStack {
+                // Only offered when the panel was opened by hand before the
+                // cutoff. At the real cutoff the choice is end the day or
+                // work late, not dismiss.
+                if state.phase != .evening {
+                    Button("Cancel") { RitualPanelController.shared.hide() }
+                        .controlSize(.large)
+                        .keyboardShortcut(.cancelAction)
+                }
                 Button("Work late…") { isShowingOverride = true }
                     .controlSize(.large)
                 Spacer()
