@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 
 /// One markdown file per day in the configured note directory. The ritual
 /// writes the main body; overrides append as they happen.
@@ -11,6 +11,21 @@ enum DailyNote {
 
     static func path(for date: Date = Date()) -> String {
         "\(AppSettings.shared.noteDirectory)/\(dayKey(for: date)).md"
+    }
+
+    /// Opens in TextEdit rather than the system .md handler: that handler is
+    /// often a code editor, which may itself be on the blocklist by evening.
+    static func openToday() {
+        let notePath = path()
+        if !FileManager.default.fileExists(atPath: notePath) {
+            append(raw: "") // creates the file with its date header
+        }
+        let textEdit = URL(fileURLWithPath: "/System/Applications/TextEdit.app")
+        NSWorkspace.shared.open(
+            [URL(fileURLWithPath: notePath)],
+            withApplicationAt: textEdit,
+            configuration: NSWorkspace.OpenConfiguration()
+        )
     }
 
     static func writeRitual(finished: String, tomorrow: String, sessions: [ClaudeSession]) {

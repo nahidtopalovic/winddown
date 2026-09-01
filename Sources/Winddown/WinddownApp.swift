@@ -10,9 +10,12 @@ struct WinddownApp: App {
         MenuBarExtra {
             MenuContent(state: state, settings: settings)
         } label: {
-            Image(systemName: iconName)
-            if !state.menuTitle.isEmpty {
-                Text(state.menuTitle)
+            // Interpolating the symbol into the Text keeps it on the text
+            // baseline; a separate Image floats misaligned in the menu bar.
+            if state.menuTitle.isEmpty {
+                Image(systemName: iconName)
+            } else {
+                Text("\(Image(systemName: iconName)) \(state.menuTitle)")
             }
         }
 
@@ -61,7 +64,7 @@ struct MenuContent: View {
         }
 
         Button("Open today's note") {
-            NSWorkspace.shared.open(URL(fileURLWithPath: DailyNote.path()))
+            DailyNote.openToday()
         }
 
         Divider()
