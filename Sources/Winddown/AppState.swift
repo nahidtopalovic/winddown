@@ -77,7 +77,12 @@ final class AppState: ObservableObject {
         // settings edits, and manual wallpaper changes. No-op when unchanged.
         Wallpaper.apply(for: newPhase)
         // Ritual can become due while already in .evening (override expired).
-        if newPhase == .evening && !isRitualDone(at: now) && !RitualPanelController.shared.isVisible {
+        // Not after midnight though: an unfinished ritual is not worth
+        // opening a window over if you're waking the laptop at 3am.
+        if newPhase == .evening,
+           !isRitualDone(at: now),
+           minutes(of: now) >= settings.blockEndMinutes,
+           !RitualPanelController.shared.isVisible {
             RitualPanelController.shared.show()
         }
     }
@@ -114,6 +119,19 @@ final class AppState: ObservableObject {
         return !Calendar.current.isDateInWeekend(date)
     }
 
+    /// The workday a moment belongs to, which is not the calendar day between
+    /// midnight and the block end: 1am Wednesday is still Tuesday's evening.
+    /// Every day-scoped flag (ritual done, ended early) must use this, or the
+    /// pre-dawn hours look like a fresh day and re-arm last night's ritual.
+    private func workdayKey(for date: Date) -> String {
+        guard minutes(of: date) < settings.blockEndMinutes else {
+            return DailyNote.dayKey(for: date)
+        }
+
+        let previousDay = Calendar.current.date(byAdding: .day, value: -1, to: date)!
+        return DailyNote.dayKey(for: previousDay)
+    }
+
     func computePhase(at now: Date) -> Phase {
         if let paused = settings.pausedUntil, now < paused { return .offDuty }
 
@@ -132,7 +150,7 @@ final class AppState: ObservableObject {
 
         // An early finish outranks the clock: once the day is called, it stays
         // called until tomorrow.
-        if settings.endedEarlyDay == DailyNote.dayKey(for: now) {
+        if settings.endedEarlyDay == workdayKey(for: now) {
             return overrideActive(at: now) ? .workingLate : .evening
         }
         if mins >= settings.cutoffMinutes {
@@ -147,7 +165,8 @@ final class AppState: ObservableObject {
     /// still ahead — the only case where going back to work makes sense.
     var didEndEarly: Bool {
         let now = Date()
-        return settings.endedEarlyDay == DailyNote.dayKey(for: now)
+        return settings.endedEarlyDay == workdayKey(for: now)
+            && minutes(of: now) >= settings.blockEndMinutes
             && minutes(of: now) < settings.cutoffMinutes
     }
 
@@ -158,7 +177,7 @@ final class AppState: ObservableObject {
     }
 
     private func isRitualDone(at now: Date) -> Bool {
-        settings.ritualDoneDay == DailyNote.dayKey(for: now)
+        settings.ritualDoneDay == workdayKey(for: now)
     }
 
     private func title(for phase: Phase, at now: Date) -> String {
@@ -217,7 +236,7 @@ final class AppState: ObservableObject {
     }
 
     func completeRitual(finished: String, tomorrow: String, sessions: [ClaudeSession]) {
-        let today = DailyNote.dayKey(for: Date())
+        let today = workdayKey(for: Date())
         settings.ritualDoneDay = today
         settings.endedEarlyDay = today
         DailyNote.writeRitual(finished: finished, tomorrow: tomorrow, sessions: sessions)
