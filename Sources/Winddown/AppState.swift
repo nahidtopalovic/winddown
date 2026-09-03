@@ -8,6 +8,8 @@ enum Phase: Equatable {
     case ramp
     /// Final stretch before cutoff (red icon), notification fired.
     case warning
+    /// Cutoff reached, apps not closed yet: the grace countdown is running.
+    case grace
     /// Past cutoff with a work-late override active.
     case workingLate
     /// Past cutoff: ritual pending or done, work apps blocked.
@@ -38,6 +40,10 @@ final class AppState: ObservableObject {
     private let blocker = AppBlocker()
     private var timer: Timer?
     private var didNotifyWarning = false
+    /// When the current grace countdown started; nil when not in grace.
+    private var graceStartedAt: Date?
+    /// Workday whose grace period is already spent, so it runs once a day.
+    private var graceDoneDay: String?
     private var settingsSink: AnyCancellable?
 
     private init() {}
@@ -71,6 +77,13 @@ final class AppState: ObservableObject {
         if newTitle != menuTitle.text { menuTitle.text = newTitle }
         // Keep the blocker in sync even without a phase change (override expiry,
         // blocklist edits).
+        if newPhase == .grace {
+            GracePanelController.shared.show(secondsRemaining: { [weak self] in
+                self?.graceSecondsRemaining() ?? 0
+            })
+        } else if GracePanelController.shared.isVisible {
+            GracePanelController.shared.hide()
+        }
         let shouldBlock = newPhase == .evening
         blocker.setActive(shouldBlock, bundleIds: settings.blockedBundleIds)
         // Every tick, not just transitions: self-heals after space switches,
@@ -111,6 +124,8 @@ final class AppState: ObservableObject {
             }
         case .evening:
             break // ritual handled in tick(), blocker in tick()
+        case .grace:
+            break // panel handled in tick()
         case .working, .ramp, .offDuty, .workingLate:
             didNotifyWarning = newPhase == .workingLate
         }
@@ -143,10 +158,6 @@ final class AppState: ObservableObject {
         return DailyNote.dayKey(for: previousDay)
     }
 
-    /// The cutoff actually in force, in minutes after midnight. An extension
-    /// pushes it later, so the ramp, the warning and the countdown all follow
-    /// the new end of day instead of the one in settings. Returns nil when the
-    /// override runs past midnight, which means today has no cutoff left.
     /// Label for the end of day in force, "18:00" or an extended "19:30".
     var effectiveCutoffLabel: String {
         guard let cutoff = effectiveCutoffMinutes(at: Date()) else { return "tomorrow" }
@@ -154,6 +165,10 @@ final class AppState: ObservableObject {
         return String(format: "%d:%02d", cutoff / 60, cutoff % 60)
     }
 
+    /// The cutoff actually in force, in minutes after midnight. An extension
+    /// pushes it later, so the ramp, the warning and the countdown all follow
+    /// the new end of day instead of the one in settings. Returns nil when the
+    /// override runs past midnight, which means today has no cutoff left.
     private func effectiveCutoffMinutes(at now: Date) -> Int? {
         guard let until = settings.overrideUntil, now < until else {
             return settings.cutoffMinutes
@@ -188,11 +203,51 @@ final class AppState: ObservableObject {
         guard let cutoff = effectiveCutoffMinutes(at: now) else { return .workingLate }
 
         if mins >= cutoff {
-            return overrideActive(at: now) ? .workingLate : .evening
+            if overrideActive(at: now) { return .workingLate }
+            // Hold apps open for the grace period so the cutoff never closes
+            // an editor without a visible countdown first.
+            if isGraceRunning(at: now) { return .grace }
+
+            return .evening
         }
         if mins >= cutoff - settings.warnLeadMinutes { return .warning }
         if mins >= cutoff - settings.rampLeadMinutes { return .ramp }
         return .working
+    }
+
+    /// Grace runs for graceSeconds after the cutoff, once per workday. The
+    /// start is recorded on first entry rather than derived from the cutoff,
+    /// so a laptop opened hours later does not owe a countdown.
+    private func isGraceRunning(at now: Date) -> Bool {
+        guard settings.graceSeconds > 0,
+              graceDoneDay != workdayKey(for: now)
+        else { return false }
+
+        guard let startedAt = graceStartedAt else {
+            graceStartedAt = now
+            return true
+        }
+        if now.timeIntervalSince(startedAt) < TimeInterval(settings.graceSeconds) {
+            return true
+        }
+        graceDoneDay = workdayKey(for: now)
+        graceStartedAt = nil
+        return false
+    }
+
+    /// Seconds left before apps close, for the grace panel's countdown.
+    func graceSecondsRemaining() -> Int {
+        guard let startedAt = graceStartedAt else { return settings.graceSeconds }
+
+        let elapsed = Date().timeIntervalSince(startedAt)
+        return max(0, settings.graceSeconds - Int(elapsed))
+    }
+
+    /// Skips the rest of the countdown and closes the apps now.
+    func endGraceNow() {
+        graceDoneDay = workdayKey(for: Date())
+        graceStartedAt = nil
+        tick()
     }
 
     /// True while the evening was started by hand and the scheduled cutoff is
@@ -220,6 +275,8 @@ final class AppState: ObservableObject {
             return ""
         case .evening:
             return "off"
+        case .grace:
+            return "\(graceSecondsRemaining())s"
         case .workingLate:
             let left = Int(settings.overrideUntil!.timeIntervalSince(now)) / 60 + 1
             return "late \(left)m"
@@ -268,6 +325,8 @@ final class AppState: ObservableObject {
         settings.endedEarlyDay = nil
         DailyNote.append(section: "Extended", body: "Pushed the cutoff by \(added) min")
         didNotifyWarning = false // the new cutoff deserves its own warning
+        graceDoneDay = nil       // and its own grace countdown
+        graceStartedAt = nil
         tick()
     }
 

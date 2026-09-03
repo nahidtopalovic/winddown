@@ -20,6 +20,15 @@ struct SettingsView: View {
                 )
                 TimeMinutePicker(label: "Blocked until (next morning)", minutes: $settings.blockEndMinutes)
                 Toggle("Weekdays only", isOn: $settings.weekdaysOnly)
+                Picker("Grace before closing apps", selection: $settings.graceSeconds) {
+                    Text("None").tag(0)
+                    Text("30 seconds").tag(30)
+                    Text("1 minute").tag(60)
+                    Text("2 minutes").tag(120)
+                    Text("5 minutes").tag(300)
+                }
+                Text("A countdown with extend buttons appears at the cutoff. Apps stay open until it runs out.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
 
             Section("Blocked apps") {

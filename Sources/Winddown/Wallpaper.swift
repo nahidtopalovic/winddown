@@ -8,7 +8,7 @@ enum Wallpaper {
     static func apply(for phase: Phase) {
         let settings = AppSettings.shared
         let isWorkTime = switch phase {
-        case .working, .ramp, .warning, .workingLate: true
+        case .working, .ramp, .warning, .grace, .workingLate: true
         case .evening, .offDuty: false
         }
         let path = isWorkTime ? settings.workWallpaper : settings.eveningWallpaper

@@ -32,6 +32,11 @@ final class AppSettings: ObservableObject {
     @Published var noteDirectory: String {
         didSet { defaults.set(noteDirectory, forKey: "noteDirectory") }
     }
+    /// Seconds between the cutoff and apps actually closing, so the cutoff
+    /// never takes an editor away without warning. 0 closes immediately.
+    @Published var graceSeconds: Int {
+        didSet { defaults.set(graceSeconds, forKey: "graceSeconds") }
+    }
     /// Whether blocked apps are also pulled out of the Dock in the evening
     /// and put back in their original slots in the morning.
     @Published var hideDockTiles: Bool {
@@ -75,6 +80,7 @@ final class AppSettings: ObservableObject {
             ?? ["com.microsoft.VSCode", "com.anthropic.claudefordesktop"]
         noteDirectory = defaults.string(forKey: "noteDirectory")
             ?? NSString(string: "~/Documents/winddown").expandingTildeInPath
+        graceSeconds = defaults.object(forKey: "graceSeconds") as? Int ?? 60
         hideDockTiles = defaults.object(forKey: "hideDockTiles") as? Bool ?? false
         workWallpaper = defaults.string(forKey: "workWallpaper") ?? ""
         eveningWallpaper = defaults.string(forKey: "eveningWallpaper") ?? ""
