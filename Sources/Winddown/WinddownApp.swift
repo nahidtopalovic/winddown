@@ -148,8 +148,10 @@ struct MenuContent: View {
         return formatter.string(from: date)
     }
 
+    /// Follows an extension, so the menu never advertises a cutoff that has
+    /// already been pushed back.
     private var cutoffLabel: String {
-        String(format: "%d:%02d", settings.cutoffMinutes / 60, settings.cutoffMinutes % 60)
+        state.effectiveCutoffLabel
     }
 }
 

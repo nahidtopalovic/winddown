@@ -143,6 +143,26 @@ final class AppState: ObservableObject {
         return DailyNote.dayKey(for: previousDay)
     }
 
+    /// The cutoff actually in force, in minutes after midnight. An extension
+    /// pushes it later, so the ramp, the warning and the countdown all follow
+    /// the new end of day instead of the one in settings. Returns nil when the
+    /// override runs past midnight, which means today has no cutoff left.
+    /// Label for the end of day in force, "18:00" or an extended "19:30".
+    var effectiveCutoffLabel: String {
+        guard let cutoff = effectiveCutoffMinutes(at: Date()) else { return "tomorrow" }
+
+        return String(format: "%d:%02d", cutoff / 60, cutoff % 60)
+    }
+
+    private func effectiveCutoffMinutes(at now: Date) -> Int? {
+        guard let until = settings.overrideUntil, now < until else {
+            return settings.cutoffMinutes
+        }
+        guard Calendar.current.isDate(until, inSameDayAs: now) else { return nil }
+
+        return max(settings.cutoffMinutes, minutes(of: until))
+    }
+
     func computePhase(at now: Date) -> Phase {
         if let paused = settings.pausedUntil, now < paused { return .offDuty }
 
@@ -164,11 +184,14 @@ final class AppState: ObservableObject {
         if settings.endedEarlyDay == workdayKey(for: now) {
             return overrideActive(at: now) ? .workingLate : .evening
         }
-        if mins >= settings.cutoffMinutes {
+        // An extension past midnight leaves no cutoff today.
+        guard let cutoff = effectiveCutoffMinutes(at: now) else { return .workingLate }
+
+        if mins >= cutoff {
             return overrideActive(at: now) ? .workingLate : .evening
         }
-        if mins >= settings.cutoffMinutes - settings.warnLeadMinutes { return .warning }
-        if mins >= settings.cutoffMinutes - settings.rampLeadMinutes { return .ramp }
+        if mins >= cutoff - settings.warnLeadMinutes { return .warning }
+        if mins >= cutoff - settings.rampLeadMinutes { return .ramp }
         return .working
     }
 
@@ -202,7 +225,7 @@ final class AppState: ObservableObject {
             return "late \(left)m"
         case .working, .ramp, .warning:
             let mins = minutes(of: now)
-            let left = settings.cutoffMinutes - mins
+            let left = max(0, (effectiveCutoffMinutes(at: now) ?? settings.cutoffMinutes) - mins)
             if left >= 120 { return "" } // only show countdown when the end is near
             let hours = left / 60, rem = left % 60
             return hours > 0 ? "\(hours)h \(rem)m" : "\(rem)m"
@@ -244,6 +267,7 @@ final class AppState: ObservableObject {
         // An extension overrules a finish called earlier today.
         settings.endedEarlyDay = nil
         DailyNote.append(section: "Extended", body: "Pushed the cutoff by \(added) min")
+        didNotifyWarning = false // the new cutoff deserves its own warning
         tick()
     }
 
