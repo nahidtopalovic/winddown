@@ -16,7 +16,7 @@ enum DockTiles {
     private static let stashKey = "dockStash"
 
     static func hide(bundleIds: [String]) {
-        guard !bundleIds.isEmpty, loadStash() == nil else { return } // already hidden
+        guard !bundleIds.isEmpty, loadStash() == nil, !isSettling else { return }
 
         guard var tiles = currentTiles() else { return }
 
@@ -38,17 +38,38 @@ enum DockTiles {
     }
 
     static func restore() {
-        guard let stash = loadStash(), var tiles = currentTiles() else { return }
+        guard !isSettling, let stash = loadStash(), var tiles = currentTiles() else { return }
+
+        // Clear the stash first: a restore that partially fails must not leave
+        // a stash behind for the next tick to apply again.
+        clearStash()
 
         // Ascending index order, so each insert lands at its original slot.
         for entry in stash.sorted(by: { ($0["index"] as? Int ?? 0) < ($1["index"] as? Int ?? 0) }) {
-            guard let tile = entry["tile"] as? [String: Any] else { continue }
+            guard let tile = entry["tile"] as? [String: Any],
+                  let path = appPath(of: tile)
+            else { continue }
+
+            // The Dock may have written its pre-restart list back to defaults,
+            // so a tile can already be present. Inserting blind duplicates it.
+            let isPresent = tiles.contains { appPath(of: $0) == path }
+            guard !isPresent else { continue }
 
             let index = min(entry["index"] as? Int ?? tiles.count, tiles.count)
             tiles.insert(tile, at: index)
         }
-        clearStash()
-        write(tiles: tiles)
+        write(tiles: deduplicated(tiles))
+    }
+
+    /// Collapses repeated app paths, keeping the first occurrence. A safety net
+    /// for a Dock list that already picked up duplicates.
+    private static func deduplicated(_ tiles: [[String: Any]]) -> [[String: Any]] {
+        var seenPaths: Set<String> = []
+        return tiles.filter { tile in
+            guard let path = appPath(of: tile) else { return true }
+
+            return seenPaths.insert(path).inserted
+        }
     }
 
     static var isHiding: Bool { loadStash() != nil }
@@ -59,10 +80,23 @@ enum DockTiles {
         UserDefaults(suiteName: dockDomain)?.array(forKey: tilesKey) as? [[String: Any]]
     }
 
+    /// A restarting Dock rewrites persistent-apps from its own memory, so a
+    /// second write landing in that window can be lost or duplicated. Writes
+    /// are refused until the restart settles.
+    private static var lastWrite: Date?
+    private static let restartSettleSeconds: TimeInterval = 5
+
+    static var isSettling: Bool {
+        guard let lastWrite else { return false }
+
+        return Date().timeIntervalSince(lastWrite) < restartSettleSeconds
+    }
+
     /// Restarting the Dock is the only way to make it reread its defaults.
     private static func write(tiles: [[String: Any]]) {
         guard let defaults = UserDefaults(suiteName: dockDomain) else { return }
 
+        lastWrite = Date()
         defaults.set(tiles, forKey: tilesKey)
         defaults.synchronize()
         let restart = Process()
