@@ -30,6 +30,21 @@ struct WinddownApp: App {
     }
 }
 
+/// Buys more time before the cutoff, without the reason prompt the ritual's
+/// "Work late" asks for — this is the low-friction path for a day that just
+/// needs another hour.
+struct ExtendMenu: View {
+    let state: AppState
+
+    var body: some View {
+        Menu("Extend") {
+            Button("30 minutes") { state.extend(byMinutes: 30) }
+            Button("1 hour") { state.extend(byMinutes: 60) }
+            Button("2 hours") { state.extend(byMinutes: 120) }
+        }
+    }
+}
+
 /// Observes the countdown in isolation — see AppState.MenuTitle.
 struct MenuBarLabel: View {
     @ObservedObject var title: AppState.MenuTitle
@@ -63,8 +78,10 @@ struct MenuContent: View {
                 Button("Back to work") { state.resumeWorkday() }
             }
         case .workingLate:
+            ExtendMenu(state: state)
             Button("Done — back to evening") { state.endOverride() }
         case .working, .ramp, .warning:
+            ExtendMenu(state: state)
             Button("End the day now") { RitualPanelController.shared.show() }
         case .offDuty:
             if settings.pausedUntil != nil {

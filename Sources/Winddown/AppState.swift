@@ -213,6 +213,29 @@ final class AppState: ObservableObject {
         tick()
     }
 
+    /// Buys more work time before the cutoff hits, from the menu. Extending
+    /// an active override adds to its remaining time; extending during work
+    /// hours starts one from the scheduled cutoff, so "30 more minutes" at
+    /// 17:00 still means 18:30 rather than 17:30.
+    func extend(byMinutes added: Int) {
+        let now = Date()
+        let base: Date
+        if let until = settings.overrideUntil, now < until {
+            base = until
+        } else {
+            base = Calendar.current.date(
+                bySettingHour: settings.cutoffMinutes / 60,
+                minute: settings.cutoffMinutes % 60,
+                second: 0, of: now
+            ) ?? now
+        }
+        settings.overrideUntil = max(base, now).addingTimeInterval(TimeInterval(added * 60))
+        // An extension overrules a finish called earlier today.
+        settings.endedEarlyDay = nil
+        DailyNote.append(section: "Extended", body: "Pushed the cutoff by \(added) min")
+        tick()
+    }
+
     /// Undo an early finish: back to work, and the ritual can run again.
     func resumeWorkday() {
         settings.endedEarlyDay = nil
