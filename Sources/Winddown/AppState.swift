@@ -76,6 +76,7 @@ final class AppState: ObservableObject {
         // Every tick, not just transitions: self-heals after space switches,
         // settings edits, and manual wallpaper changes. No-op when unchanged.
         Wallpaper.apply(for: newPhase)
+        syncDockTiles(shouldHide: shouldBlock && settings.hideDockTiles)
         // Ritual can become due while already in .evening (override expired).
         // Not after midnight though: an unfinished ritual is not worth
         // opening a window over if you're waking the laptop at 3am.
@@ -84,6 +85,16 @@ final class AppState: ObservableObject {
            minutes(of: now) >= settings.blockEndMinutes,
            !RitualPanelController.shared.isVisible {
             RitualPanelController.shared.show()
+        }
+    }
+
+    /// Restores tiles whenever hiding should not be in effect, including
+    /// after the setting is switched off mid-evening.
+    private func syncDockTiles(shouldHide: Bool) {
+        if shouldHide {
+            DockTiles.hide(bundleIds: settings.blockedBundleIds)
+        } else if DockTiles.isHiding {
+            DockTiles.restore()
         }
     }
 

@@ -48,6 +48,9 @@ struct SettingsView: View {
                 }
                 Text("Find an app's bundle id with: osascript -e 'id of app \"AppName\"'")
                     .font(.caption).foregroundStyle(.secondary)
+                Toggle("Also hide them from the Dock", isOn: $settings.hideDockTiles)
+                Text("Removed at the cutoff and put back in the same Dock positions in the morning. Restarts the Dock each time.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
 
             Section("Wallpaper") {

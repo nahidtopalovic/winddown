@@ -32,6 +32,11 @@ final class AppSettings: ObservableObject {
     @Published var noteDirectory: String {
         didSet { defaults.set(noteDirectory, forKey: "noteDirectory") }
     }
+    /// Whether blocked apps are also pulled out of the Dock in the evening
+    /// and put back in their original slots in the morning.
+    @Published var hideDockTiles: Bool {
+        didSet { defaults.set(hideDockTiles, forKey: "hideDockTiles") }
+    }
     /// Wallpaper image paths; empty string disables wallpaper switching.
     @Published var workWallpaper: String {
         didSet { defaults.set(workWallpaper, forKey: "workWallpaper") }
@@ -70,6 +75,7 @@ final class AppSettings: ObservableObject {
             ?? ["com.microsoft.VSCode", "com.anthropic.claudefordesktop"]
         noteDirectory = defaults.string(forKey: "noteDirectory")
             ?? NSString(string: "~/Documents/winddown").expandingTildeInPath
+        hideDockTiles = defaults.object(forKey: "hideDockTiles") as? Bool ?? false
         workWallpaper = defaults.string(forKey: "workWallpaper") ?? ""
         eveningWallpaper = defaults.string(forKey: "eveningWallpaper") ?? ""
         overrideUntil = defaults.object(forKey: "overrideUntil") as? Date
