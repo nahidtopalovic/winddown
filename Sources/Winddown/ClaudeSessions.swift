@@ -21,20 +21,24 @@ enum ClaudeSessions {
 
         for dir in projectDirs {
             let dirPath = "\(root)/\(dir)"
-            guard let files = try? fm.contentsOfDirectory(atPath: dirPath) else { continue }
+            var isDirectory: ObjCBool = false
+            guard fm.fileExists(atPath: dirPath, isDirectory: &isDirectory), isDirectory.boolValue,
+                  let files = try? fm.contentsOfDirectory(atPath: dirPath)
+            else { continue }
 
             for file in files where file.hasSuffix(".jsonl") {
                 let path = "\(dirPath)/\(file)"
                 guard
                     let attrs = try? fm.attributesOfItem(atPath: path),
                     let modified = attrs[.modificationDate] as? Date,
-                    modified >= startOfDay
+                    modified >= startOfDay,
+                    let title = title(of: path)
                 else { continue }
 
                 sessions.append(ClaudeSession(
                     id: path,
                     project: decodeProjectPath(dir),
-                    summary: summary(of: path),
+                    summary: title,
                     modified: modified
                 ))
             }
@@ -48,32 +52,32 @@ enum ClaudeSessions {
         dir.hasPrefix("-") ? dir.replacingOccurrences(of: "-", with: "/") : dir
     }
 
-    /// Best-effort one-liner: the session's summary line if present, else the
-    /// first user message. Reads only the head of the file.
-    private static func summary(of path: String) -> String {
-        guard let handle = FileHandle(forReadingAtPath: path),
-              let data = try? handle.read(upToCount: 64 * 1024),
-              let head = String(data: data, encoding: .utf8)
-        else { return "" }
+    /// Claude Code writes a `custom-title` line naming the session, rewriting
+    /// it as the conversation moves on, so the last one describes what the
+    /// session became. Sessions without one are skipped: the alternative was
+    /// the opening prompt, which for a long-running session describes what it
+    /// started as days ago, not what happened today.
+    private static func title(of path: String) -> String? {
+        guard let handle = FileHandle(forReadingAtPath: path) else { return nil }
 
-        var firstUserText = ""
-        for line in head.split(separator: "\n").prefix(50) {
-            guard
-                let json = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any]
+        defer { try? handle.close() }
+        guard let data = try? handle.readToEnd(),
+              let contents = String(data: data, encoding: .utf8)
+        else { return nil }
+
+        var latest: String?
+        for line in contents.split(separator: "\n") {
+            guard line.contains("\"custom-title\""),
+                  let json = try? JSONSerialization.jsonObject(with: Data(line.utf8))
+                    as? [String: Any],
+                  json["type"] as? String == "custom-title",
+                  let title = json["customTitle"] as? String,
+                  !title.isEmpty
             else { continue }
 
-            if let summary = json["summary"] as? String {
-                return truncate(summary)
-            }
-            if firstUserText.isEmpty,
-               json["type"] as? String == "user",
-               let message = json["message"] as? [String: Any],
-               let content = message["content"] as? String,
-               !content.hasPrefix("<") { // skip system-reminder / command wrappers
-                firstUserText = content
-            }
+            latest = title
         }
-        return truncate(firstUserText)
+        return latest.map(truncate)
     }
 
     private static func truncate(_ text: String) -> String {

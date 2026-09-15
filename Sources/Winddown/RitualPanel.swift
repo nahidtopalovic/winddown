@@ -14,24 +14,23 @@ final class RitualPanelController {
 
     func show() {
         if panel == nil {
+            // Borderless: a titlebar here draws a dead minimise button beside
+            // the close one and floats both over the content. The view's own
+            // Cancel button is the dismiss affordance instead.
             let panel = NSPanel(
                 contentRect: NSRect(x: 0, y: 0, width: 620, height: 560),
-                styleMask: [.titled, .closable, .fullSizeContentView, .nonactivatingPanel],
+                styleMask: [.borderless, .nonactivatingPanel],
                 backing: .buffered, defer: false
             )
-            panel.title = "Winddown"
-            panel.titlebarAppearsTransparent = true
             panel.level = .floating
             panel.isFloatingPanel = true
             panel.hidesOnDeactivate = false
             panel.isReleasedWhenClosed = false
+            panel.isOpaque = false
+            panel.backgroundColor = .clear
             panel.contentView = NSHostingView(rootView: RitualView())
             self.panel = panel
         }
-        // Closable only before the cutoff: at the cutoff itself the way out is
-        // "End the day" or a logged "Work late", not a quiet dismiss.
-        panel?.standardWindowButton(.closeButton)?.isHidden =
-            AppState.shared.phase == .evening
         panel?.center()
         panel?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -123,6 +122,8 @@ struct RitualView: View {
         }
         .padding(24)
         .frame(width: 620)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.quaternary))
         .onAppear { sessions = ClaudeSessions.today() }
         .sheet(isPresented: $isShowingOverride) {
             OverrideSheet(reason: $overrideReason, isPresented: $isShowingOverride)
