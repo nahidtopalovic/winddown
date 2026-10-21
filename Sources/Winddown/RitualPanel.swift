@@ -17,7 +17,7 @@ final class RitualPanelController {
             // Borderless: a titlebar here draws a dead minimise button beside
             // the close one and floats both over the content. The view's own
             // Cancel button is the dismiss affordance instead.
-            let panel = NSPanel(
+            let panel = KeyablePanel(
                 contentRect: NSRect(x: 0, y: 0, width: 620, height: 560),
                 styleMask: [.borderless, .nonactivatingPanel],
                 backing: .buffered, defer: false
@@ -39,6 +39,14 @@ final class RitualPanelController {
     func hide() {
         panel?.orderOut(nil)
     }
+}
+
+/**
+ * A borderless NSPanel refuses to become the key window, so its text fields
+ * never get keyboard input. This override lets the note fields take typing.
+ */
+private final class KeyablePanel: NSPanel {
+    override var canBecomeKey: Bool { true }
 }
 
 struct RitualView: View {
