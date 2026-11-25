@@ -80,7 +80,7 @@ struct MenuContent: View {
             }
         case .grace:
             ExtendMenu(state: state)
-            Button("Close work apps now") { state.endGraceNow() }
+            Button("End the day now") { state.endGraceNow() }
         case .workingLate:
             ExtendMenu(state: state)
             Button("Done — back to evening") { state.endOverride() }
@@ -134,7 +134,7 @@ struct MenuContent: View {
         case .working: "Working — cutoff at \(cutoffLabel)"
         case .ramp: "Winding down — cutoff at \(cutoffLabel)"
         case .warning: "Wrap up — almost \(cutoffLabel)"
-        case .grace: "Closing work apps in \(state.graceSecondsRemaining())s"
+        case .grace: "Ending the day in \(state.graceSecondsRemaining())s"
         case .workingLate: "Working late (logged)"
         case .evening: "Evening — work apps are off"
         case .offDuty: settings.pausedUntil != nil ? "Paused until tomorrow" : "Off duty"

@@ -9,7 +9,7 @@ The laptop stays usable for personal stuff. Only work apps (VS Code, Claude by d
 - **5:30pm** — menu bar icon turns amber, countdown appears.
 - **5:45pm** — notification: 15 minutes left, start wrapping up.
 - **6:00pm** — a panel takes over: it shows today's Claude Code sessions (read from `~/.claude/projects`) and asks two questions — *what did I finish* and *what's first tomorrow*. Answers are saved to a daily markdown note in `~/Documents/winddown/`.
-- **After 6pm** — blocked apps are quit; relaunching them quits them again with a notification. Everything else works normally. Ends at 5am.
+- **After you click End the day** — blocked apps are quit; relaunching them quits them again with a notification. Everything else works normally. Ends at 5am.
 
 ## Escape hatches
 

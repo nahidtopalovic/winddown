@@ -1,9 +1,8 @@
 import AppKit
 import SwiftUI
 
-/// The last chance before apps close. Shows a live countdown with extend
-/// buttons, so the cutoff never takes an editor away mid-thought: the apps
-/// keep running until this elapses.
+/// A short countdown before the end-of-day panel opens, with extend buttons
+/// for when the cutoff lands mid-thought.
 @MainActor
 final class GracePanelController {
     static let shared = GracePanelController()
@@ -62,7 +61,7 @@ private struct GraceView: View {
                 .foregroundStyle(.orange)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("Closing work apps in \(seconds)s")
+                Text("Ending the day in \(seconds)s")
                     .font(.headline)
                 Text("Save what you need, or take more time.")
                     .font(.subheadline)
@@ -78,7 +77,7 @@ private struct GraceView: View {
             }
             .controlSize(.small)
 
-            Button("Close now") { AppState.shared.endGraceNow() }
+            Button("End now") { AppState.shared.endGraceNow() }
                 .controlSize(.small)
                 .keyboardShortcut(.defaultAction)
         }

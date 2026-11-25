@@ -84,7 +84,9 @@ final class AppState: ObservableObject {
         } else if GracePanelController.shared.isVisible {
             GracePanelController.shared.hide()
         }
-        let shouldBlock = newPhase == .evening
+        // Apps close only once the day is ended in the ritual panel, so the
+        // panel never shows up over editors that are already gone.
+        let shouldBlock = newPhase == .evening && isRitualDone(at: now)
         blocker.setActive(shouldBlock, bundleIds: settings.blockedBundleIds)
         // Every tick, not just transitions: self-heals after space switches,
         // settings edits, and manual wallpaper changes. No-op when unchanged.
@@ -243,7 +245,7 @@ final class AppState: ObservableObject {
         return max(0, settings.graceSeconds - Int(elapsed))
     }
 
-    /// Skips the rest of the countdown and closes the apps now.
+    /// Skips the rest of the countdown and opens the end-of-day panel now.
     func endGraceNow() {
         graceDoneDay = workdayKey(for: Date())
         graceStartedAt = nil
